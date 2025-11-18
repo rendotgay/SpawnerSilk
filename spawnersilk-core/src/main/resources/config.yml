@@ -11,7 +11,7 @@
 
 # true  : New update will be downloaded and installed automatically
 # false : You need to download and install update by yourself
-auto-update: true
+auto-update: false
 
 # true  : Only player with silkTouch can destroy spawner (need spawnersilk.minespawner permission)
 # false : Everybody can destroy spawner
@@ -71,6 +71,10 @@ spawner-overlay: true
 # Time in seconds before the overlay disappears
 # A time less than 3s is not recommended
 spawner-overlay-delay: 10
+
+# true : disable AI of spawned mob
+# false : enable AI of spawned mob
+disable-spawned-mob-ai: True
 
 # You can put spawners that you don't want droppable in this list. The name is the entity name in uppercase (ex BEE).
 # In case of space in the name just put an _ (ex : ZOMBIE_HORSE)

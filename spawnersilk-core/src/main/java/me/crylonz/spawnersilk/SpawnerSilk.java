@@ -7,7 +7,8 @@ import me.crylonz.spawnersilk.command.SpawnerSilkTabCompletion;
 import me.crylonz.spawnersilk.external.ShopGuiPlus;
 import me.crylonz.spawnersilk.utils.SpawnerSilkConfig;
 import me.crylonz.spawnersilk.utils.SpawnerSilkUpdater;
-import org.bstats.bukkit.Metrics;
+//import org.bstats.bukkit.Metrics;
+import org.bukkit.Bukkit;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -38,7 +39,7 @@ public class SpawnerSilk extends JavaPlugin implements Listener {
         PluginManager pm = getServer().getPluginManager();
         pm.registerEvents(new SpawnerSilkListener(this), this);
 
-        Metrics metrics = new Metrics(this, 5536);
+//        Metrics metrics = new Metrics(this, 5536);
 
         GiveSpawnerCommandExecutor giveSpawnerCommandExecutor = new GiveSpawnerCommandExecutor();
         EditSpawnerCommandExecutor editSpawnerCommandExecutor = new EditSpawnerCommandExecutor();
@@ -98,6 +99,7 @@ public class SpawnerSilk extends JavaPlugin implements Listener {
         config.register("spawners-generate-xp", false);
         config.register("spawner-overlay", true);
         config.register("spawner-overlay-delay", 10);
+        config.register("disable-spawned-mob-ai", false);
         config.register("black-list", Collections.singleton("BOAT"));
     }
 

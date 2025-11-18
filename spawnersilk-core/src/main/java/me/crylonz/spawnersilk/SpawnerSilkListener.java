@@ -2,13 +2,12 @@ package me.crylonz.spawnersilk;
 
 import me.crylonz.spawnersilk.utils.ArmorStandCleaner;
 import me.crylonz.spawnersilk.utils.SpawnerSilkHologram;
-import org.bukkit.ChatColor;
-import org.bukkit.GameMode;
-import org.bukkit.Material;
+import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.CreatureSpawner;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
@@ -19,6 +18,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.SpawnerSpawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -28,6 +28,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Random;
 
 import static me.crylonz.spawnersilk.SpawnerSilk.getSpawnerMaterial;
@@ -54,11 +55,13 @@ public class SpawnerSilkListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockBreakEvent(BlockBreakEvent e) {
-
         if (!e.isCancelled()) {
-
             if (e.getBlock().getType() == getSpawnerMaterial() && e.getPlayer().hasPermission("spawnersilk.minespawner")) {
                 Player p = e.getPlayer();
+
+                // ADD THIS: Clean up holograms before breaking the spawner
+                removeSpawnerFromConfig(e.getBlock());
+                cleanupSpawnerHolograms(e.getBlock().getLocation());
 
                 if (!p.getInventory().getItemInMainHand().getEnchantments().containsKey(Enchantment.SILK_TOUCH)
                         && plugin.getDataConfig().getBoolean("need-silk-touch-to-destroy")) {
@@ -76,6 +79,35 @@ public class SpawnerSilkListener implements Listener {
                             plugin.getDataConfig().getInt("drop-egg-chance") >= randomEggDrop);
                 }
             }
+        }
+    }
+
+    private void cleanupSpawnerHolograms(Location spawnerLocation) {
+        // Search for nearby ArmorStands that are part of spawner holograms
+        Collection<Entity> nearbyEntities = spawnerLocation.getWorld().getNearbyEntities(spawnerLocation, 2, 3, 2);
+
+        for (Entity entity : nearbyEntities) {
+            if (entity instanceof ArmorStand) {
+                ArmorStand armorStand = (ArmorStand) entity;
+                // Check if this ArmorStand has our spawnerSilk metadata
+                if (armorStand.hasMetadata("spawnerSilk")) {
+                    armorStand.remove();
+                }
+            }
+        }
+    }
+
+    private void removeSpawnerFromConfig(Block block) {
+        String locationKey = locToString(block);
+        String configPath = "playerSpawners." + locationKey;
+
+        // Check if this spawner exists in config
+        if (plugin.getConfig().contains(configPath)) {
+            plugin.getConfig().set(configPath, null); // Remove the entry
+            plugin.saveConfig();
+
+            // Optional: Log for debugging
+            plugin.getLogger().info("Removed spawner from config: " + locationKey);
         }
     }
 
@@ -162,10 +194,16 @@ public class SpawnerSilkListener implements Listener {
         return valid;
     }
 
+    private String locToString(Block block) {
+        return block.getWorld().getName() + ";" + block.getX() + ";" + block.getY() + ";" + block.getZ();
+    }
+
     @EventHandler
     public void onBlockPlaceEvent(BlockPlaceEvent e) {
 
         if (e.getBlockPlaced().getType() == getSpawnerMaterial()) {
+            plugin.getConfig().set("playerSpawners." + locToString(e.getBlockPlaced()), true);
+            plugin.saveConfig();
             CreatureSpawner cs = (CreatureSpawner) e.getBlockPlaced().getState();
             EntityType entityType = SpawnerAPI.getEntityType(e.getItemInHand());
 
@@ -246,9 +284,48 @@ public class SpawnerSilkListener implements Listener {
         if (e.blockList().size() > 0) {
             for (int i = 0; i < e.blockList().size(); i++) {
                 Block block = e.blockList().get(i);
-                if (block.getType() == getSpawnerMaterial() && randomInt <= plugin.getDataConfig().getInt("explosion-drop-chance")) {
-                    CreatureSpawner s = (CreatureSpawner) block.getState();
-                    block.getWorld().dropItemNaturally(block.getLocation(), SpawnerAPI.getSpawner(s.getSpawnedType()));
+                if (block.getType() == getSpawnerMaterial()) {
+                    // ADD THIS: Clean up holograms for exploded spawners
+                    removeSpawnerFromConfig(block);
+                    cleanupSpawnerHolograms(block.getLocation());
+
+                    if (randomInt <= plugin.getDataConfig().getInt("explosion-drop-chance")) {
+                        CreatureSpawner s = (CreatureSpawner) block.getState();
+                        block.getWorld().dropItemNaturally(block.getLocation(), SpawnerAPI.getSpawner(s.getSpawnedType()));
+                    }
+                }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onSpawnerSpawn(SpawnerSpawnEvent e) {
+        if (plugin.getDataConfig().getBoolean("disable-spawned-mob-ai")) {
+            String key = e.getSpawner().getWorld().getName() + ";" +
+                    e.getSpawner().getX() + ";" +
+                    e.getSpawner().getY() + ";" +
+                    e.getSpawner().getZ();
+
+            if (!plugin.getConfig().getBoolean("playerSpawners." + key)) {
+                return;
+            }
+            if (e.getEntity() instanceof org.bukkit.entity.Mob) {
+                org.bukkit.entity.Mob mob = (org.bukkit.entity.Mob) e.getEntity();
+
+                // Paper API approach - more control over what gets disabled
+                try {
+                    // Try Paper methods first
+                    mob.setAware(false); // Disable AI but keep physics
+                } catch (NoSuchMethodError paperError) {
+                    // Fallback to Bukkit with workaround
+                    mob.setAI(false);
+                    // Schedule a task to re-enable physics next tick
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (mob.isValid()) {
+                            // This might not work perfectly but can help
+                            mob.setGravity(true);
+                        }
+                    }, 1L);
                 }
             }
         }
