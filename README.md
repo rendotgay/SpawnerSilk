@@ -12,6 +12,7 @@
 **Mine spawners with silk touch / Spawner management**
 
 Java Edition required. SpawnerSilk is mainly compatible with Bukkit, Spigot and Paper.
+Modified to disable AI from player placed spawners.
 
 ## Download & Info
 
