@@ -27,6 +27,13 @@ public class SpawnerSilkConfig {
         return (Boolean) configData.get(key);
     }
 
+    public Boolean getBoolean(String key, Boolean defaultValue) {
+        if (configData.containsKey(key)) {
+            return (Boolean) configData.get(key);
+        }
+        return defaultValue;
+    }
+
 
     public ArrayList<String> getList(String key) {
         return (ArrayList<String>) configData.get(key);
@@ -35,6 +42,13 @@ public class SpawnerSilkConfig {
 
     public double getDouble(String key) {
         return (double) configData.get(key);
+    }
+
+    public Double getDouble(String key, Double defaultValue) {
+        if (configData.containsKey(key)) {
+            return (Double) configData.get(key);
+        }
+        return defaultValue;
     }
 
     public int getInt(String key) {return (int) configData.get(key);}

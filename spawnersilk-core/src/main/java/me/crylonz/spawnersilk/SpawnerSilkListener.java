@@ -6,10 +6,7 @@ import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.CreatureSpawner;
 import org.bukkit.enchantments.Enchantment;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -17,6 +14,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.SpawnerSpawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -329,5 +327,146 @@ public class SpawnerSilkListener implements Listener {
                 }
             }
         }
+    }
+
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        if (!plugin.getDataConfig().getBoolean("mob-egg-drop.enabled", true)) {
+            return;
+        }
+
+        LivingEntity entity = event.getEntity();
+        Player killer = entity.getKiller();
+
+        // Check if killed by player and has permission if required
+        if (killer == null ||
+                (plugin.getDataConfig().getBoolean("mob-egg-drop.require-permission", true) &&
+                        !killer.hasPermission("spawnersilk.mobeggdrop"))) {
+            return;
+        }
+
+        EntityType entityType = entity.getType();
+
+        // Check if entity is in blacklist
+        java.util.List<?> blacklist = plugin.getDataConfig().getList("mob-egg-drop.blacklist");
+        if (blacklist != null) {
+            boolean isBlacklisted = blacklist.stream()
+                    .anyMatch(bannedEntity -> bannedEntity.toString().toUpperCase().contains(entityType.name().toUpperCase()));
+            if (isBlacklisted) {
+                return;
+            }
+        }
+
+        // Check if this entity type has a spawn egg
+        Material spawnEggMaterial = getSpawnEggMaterial(entityType);
+        if (spawnEggMaterial == null) {
+            return;
+        }
+
+        // Calculate base drop chance
+        double baseDropChance = plugin.getDataConfig().getDouble("mob-egg-drop.chance", 2.0);
+
+        // Apply looting enchantment bonus
+        double effectiveDropChance = applyLootingBonus(killer, baseDropChance);
+
+        // Check if drop should occur
+        if (new Random().nextDouble() * 100 < effectiveDropChance) {
+            ItemStack spawnEgg = new ItemStack(spawnEggMaterial);
+            event.getDrops().add(spawnEgg);
+
+            // Optional: Send message to player
+            if (plugin.getDataConfig().getBoolean("mob-egg-drop.send-message", false)) {
+                killer.sendMessage(ChatColor.GREEN + "You found a " +
+                        entityType.name().toLowerCase().replace("_", " ") +
+                        " spawn egg!");
+            }
+
+            // Server announcement instead of player message
+            if (plugin.getDataConfig().getBoolean("mob-egg-drop.send-message", false)) {
+                String entityName = formatEntityName(entityType.name());
+                String announcement = ChatColor.GOLD + "⚡ " + ChatColor.YELLOW + killer.getDisplayName() +
+                        ChatColor.GREEN + " found a " + ChatColor.AQUA + entityName +
+                        ChatColor.GREEN + " spawn egg!";
+
+                // Broadcast to entire server
+                Bukkit.broadcastMessage(announcement);
+
+                // Optional: Add sound effect
+                if (plugin.getDataConfig().getBoolean("mob-egg-drop.announcement-sound", true)) {
+                    for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                        onlinePlayer.playSound(onlinePlayer.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.5f, 1.2f);
+                    }
+                }
+            }
+        }
+    }
+
+    private String formatEntityName(String entityName) {
+        return entityName.toLowerCase()
+                .replace("_", " ")
+                .replace("minecraft:", "");
+    }
+
+    private Material getSpawnEggMaterial(EntityType entityType) {
+        try {
+            // Handle special cases and legacy names
+            switch (entityType) {
+                case MUSHROOM_COW:
+                    return Material.MOOSHROOM_SPAWN_EGG;
+                case SNOWMAN:
+                    return Material.SNOW_GOLEM_SPAWN_EGG;
+                case IRON_GOLEM:
+                    return Material.IRON_GOLEM_SPAWN_EGG;
+                case WITHER:
+                    return Material.WITHER_SPAWN_EGG;
+                case ENDER_DRAGON:
+                    return Material.ENDER_DRAGON_SPAWN_EGG;
+                case ZOMBIE_HORSE:
+                    return Material.ZOMBIE_HORSE_SPAWN_EGG;
+                case SKELETON_HORSE:
+                    return Material.SKELETON_HORSE_SPAWN_EGG;
+                default:
+                    // Try to get the spawn egg material using standard naming convention
+                    String entityName = entityType.name().toUpperCase();
+                    String eggName = entityName + "_SPAWN_EGG";
+                    Material eggMaterial = Material.getMaterial(eggName);
+
+                    if (eggMaterial == null) {
+                        // Try with MOB prefix for some versions
+                        eggName = "MOB_" + eggName;
+                        eggMaterial = Material.getMaterial(eggName);
+                    }
+
+                    return eggMaterial;
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Could not find spawn egg for entity type: " + entityType);
+            return null;
+        }
+    }
+
+    private double applyLootingBonus(Player player, double baseChance) {
+        ItemStack weapon = player.getInventory().getItemInMainHand();
+
+        if (weapon != null && weapon.hasItemMeta()) {
+            int lootingLevel = weapon.getEnchantmentLevel(Enchantment.LOOT_BONUS_MOBS);
+
+            // Different formulas you can use - choose one:
+
+            // Option 1: Linear bonus (1% per looting level)
+            // return baseChance + (lootingLevel * 1.0);
+
+            // Option 2: Percentage bonus (15% increase per level)
+            // return baseChance * (1 + (lootingLevel * 0.15));
+
+            // Option 3: Diminishing returns (configurable)
+            double bonusPerLevel = plugin.getDataConfig().getDouble("mob-egg-drop.looting-bonus-per-level", 1.0);
+            return baseChance + (lootingLevel * bonusPerLevel);
+
+            // Option 4: Minecraft's formula (approx 1% per level for rare drops)
+            // return baseChance + (lootingLevel * 0.01 * baseChance);
+        }
+
+        return baseChance;
     }
 }

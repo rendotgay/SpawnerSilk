@@ -17,6 +17,7 @@ import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Objects;
@@ -96,11 +97,17 @@ public class SpawnerSilk extends JavaPlugin implements Listener {
         config.register("use-egg", true);
         config.register("drop-in-creative", false);
         config.register("spawners-generate-xp", false);
-        config.register("spawners-generate-xp", false);
         config.register("spawner-overlay", true);
         config.register("spawner-overlay-delay", 10);
         config.register("disable-spawned-mob-ai", false);
         config.register("black-list", Collections.singleton("BOAT"));
+
+        // Add mob-egg-drop configurations
+        config.register("mob-egg-drop.enabled", true);
+        config.register("mob-egg-drop.chance", 50.0);
+        config.register("mob-egg-drop.blacklist", Arrays.asList("ENDER_DRAGON", "WITHER", "WARDEN"));
+        config.register("mob-egg-drop.require-permission", true);
+        config.register("mob-egg-drop.send-message", false);
     }
 
     public SpawnerSilkConfig getDataConfig() {

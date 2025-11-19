@@ -81,7 +81,17 @@ disable-spawned-mob-ai: True
 black-list:
   - 'BOAT_SPAWNER'
 
-
+# Mob spawn egg drop settings
+mob-egg-drop:
+  enabled: true
+  chance: 2.0 # 2% chance by default
+  looting-bonus-per-level: 1.0 # 1% increase by default
+  blacklist:
+    - "ENDER_DRAGON"
+    - "WITHER"
+    - "WARDEN"
+  require-permission: true
+  send-message: false
 
 
 
